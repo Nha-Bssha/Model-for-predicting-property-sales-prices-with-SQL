@@ -1,0 +1,226 @@
+QUESTION 1
+SELECT COUNT(DISTINCT b.id_bien) AS "nb_appartement_vendus"
+FROM vente v
+JOIN bien b
+ON v.id_bien = b.id_bien
+WHERE b.type_local = "Appartement" AND v.date_vente BETWEEN "2020-01-01" AND "2020-06-30";
+
+
+QUESTION 2
+
+SELECT r.nomRegion, COUNT(DISTINCT b.id_bien) AS "nb_appartement_vendus_par_region"
+from vente v
+inner join bien b
+    on v.id_bien = b.id_bien
+join commune c
+    on c.id_codedep_codecommune = b.id_codedep_codecommune
+JOIN region r
+    ON r.id_region = c.id_region
+WHERE b.type_local = "Appartement" AND 
+v.date_vente BETWEEN "2020-01-01" AND "2020-06-30"
+GROUP BY c.id_region;
+
+
+QUESTION 3
+
+SELECT
+    b.total_piece,
+    COUNT(b.total_piece) AS nombre_appartements_vendus,
+    ROUND(COUNT(b.total_piece) * 100.0 / (SELECT COUNT(*) FROM vente),2) AS proportion_ventes_par_pieces
+FROM
+    vente v
+JOIN 
+    bien b
+        ON v.id_bien = b.id_bien
+WHERE
+    lower(b.type_local) = "appartement"
+GROUP BY
+    b.total_piece
+ORDER BY
+    b.total_piece;
+
+
+QUESTION 4
+
+SELECT
+    c.code_dep,
+    v.prix / b.surface_carrez AS prix_m2
+FROM 
+    vente v
+INNER JOIN
+    bien b 
+ON 
+    v.id_bien = b.id_bien
+JOIN commune c
+    ON b.id_codedep_codecommune = c.id_codedep_codecommune
+GROUP BY
+    c.code_dep
+ORDER BY prix_m2 DESC
+LIMIT 10;
+
+
+REQUETE 5
+
+SELECT 
+    r.nomRegion, 
+    b.type_local, 
+    ROUND(AVG(v.prix / b.surface_carrez)) AS prix_moyen_m2,
+    ROUND(SUM(v.prix) / SUM(b.surface_carrez)) AS prix_moyen_m2_autre_calcul
+FROM 
+    bien b
+JOIN
+    vente v
+ON 
+    v.id_bien = b.id_bien
+JOIN commune c
+    ON b.id_codedep_codecommune = c.id_codedep_codecommune
+JOIN region r
+    ON r.id_region = c.id_region
+WHERE lower(b.type_local) LIKE "maison" AND lower(r.nomRegion) LIKE "_le_de_france";
+
+
+REQUETE 6
+
+SELECT b.id_bien,
+       v.prix,
+       r.nomRegion,
+       b.type_local,
+       ROUND(b.surface_carrez) as surface
+  FROM vente v
+       LEFT JOIN
+       bien b ON v.id_bien = b.id_bien
+       JOIN
+       commune c ON b.id_codedep_codecommune = c.id_codedep_codecommune
+       JOIN
+       region r ON c.id_region = r.id_region
+ WHERE lower(b.type_local) = "appartement" AND 
+       b.id_bien NOT IN (1677,3621,5519,26725,28963,29553,31142,31700,32504,34011,3919,8281,11346,11517,18483,19395)
+ --GROUP BY v.prix
+ ORDER BY v.prix DESC
+ LIMIT 10;
+
+
+REQUETE 7
+
+WITH second AS 
+(
+  SELECT COUNT(v.id_bien) AS secondTrimestre
+    FROM vente v
+    JOIN bien b ON v.id_bien = b.id_bien
+    WHERE v.date_vente BETWEEN "2020-04-01" AND "2020-06-30"
+    ORDER BY v.date_vente
+),
+
+first AS (
+           SELECT COUNT(v.id_bien) AS premierTrimestre
+             FROM vente v
+                  JOIN
+                  bien b ON v.id_bien = b.id_bien
+            WHERE v.date_vente BETWEEN "2020-01-01" AND "2020-03-31"
+            ORDER BY v.date_vente
+       )
+SELECT (ROUND(secondTrimestre - premierTrimestre)/premierTrimestre) *100 AS tauxVariation
+FROM 
+    second, 
+    first;
+
+
+REQUETE 8
+
+SELECT 
+    r.nomRegion, 
+    ROUND(AVG(v.prix / b.surface_carrez),2) AS prix_moyen_m2,
+    b.total_piece AS appartement_plus_4,
+    ROW_NUMBER() OVER (ORDER BY AVG(v.prix / b.surface_carrez) DESC) AS row_number_
+FROM vente v
+JOIN bien b
+    ON v.id_bien = b.id_bien
+JOIN commune c
+    ON c.id_codedep_codecommune = b.id_codedep_codecommune
+JOIN region r
+    ON r.id_region = c.id_region
+WHERE lower(b.type_local) LIKE 'ap_ar%' AND b.total_piece > 4
+GROUP BY r.nomRegion;
+
+
+
+REQUETE 9
+
+WITH vente_premier_trimestre AS(
+            SELECT c.nom_commune, COUNT(v.id_vente) AS nb_vente 
+            FROM vente v
+            JOIN bien b
+                ON b.id_bien = v.id_bien
+            JOIN commune c 
+                ON c.id_codedep_codecommune = b.id_codedep_codecommune 
+            WHERE v.date_vente BETWEEN "2020-01-01" AND "2020-03-31" 
+            GROUP BY nom_commune
+            )
+SELECT 
+    nom_commune AS commune, 
+    nb_vente 
+FROM vente_premier_trimestre
+WHERE nb_vente >= 50;
+
+
+
+REQUETE 10
+
+WITH prix_m2_3_pieces AS
+(
+  SELECT ROUND(AVG(v.prix / b.surface_local), 2) AS prix_m2
+  FROM vente v
+  JOIN bien b ON v.id_bien = b.id_bien
+  WHERE b.total_piece = 3
+),
+prix_m2_2_pieces AS
+(
+  SELECT ROUND(AVG(v.prix / b.surface_local), 2) AS prix_m2
+  FROM vente v
+  JOIN bien b ON v.id_bien = b.id_bien
+  WHERE b.total_piece = 2
+)
+
+SELECT 
+  prix_m2_2_pieces.prix_m2 AS prix_m2_2_pieces,
+  prix_m2_3_pieces.prix_m2 AS prix_m2_3_pieces,
+  ((prix_m2_3_pieces.prix_m2 - prix_m2_2_pieces.prix_m2) / prix_m2_2_pieces.prix_m2) * 100 AS difference_pourcentage
+FROM prix_m2_2_pieces, prix_m2_3_pieces
+
+
+
+REQUETE 11
+
+SELECT nom_commune, code_dep, moyenne_valeur_fonciere, rank_
+FROM (
+  SELECT c.nom_commune, c.code_dep, 
+         ROUND(AVG(v.prix)) AS moyenne_valeur_fonciere, 
+         RANK() OVER(PARTITION BY c.code_dep ORDER BY AVG(v.prix) DESC) AS rank_
+  FROM vente v
+  JOIN bien b 
+    ON v.id_bien = b.id_bien
+  JOIN commune c
+    ON b.id_codedep_codecommune = c.id_codedep_codecommune
+  WHERE c.code_dep IN ("06", "13", "33", "59", "69")
+  GROUP BY c.code_dep, c.nom_commune
+) ranked_data
+WHERE rank_ <= 3;
+
+
+
+REQUETE 12
+
+SELECT
+    c.nom_commune as commune,
+    COUNT(v.id_vente) AS nombre_transactions,
+    c.population_totale,
+    ROUND(COUNT(v.id_vente) * 1000.0 / c.population_totale, 2) AS vente_pour_1000_habitants
+FROM vente v
+JOIN bien b
+    ON v.id_bien = b.id_bien
+JOIN commune c
+    ON c.id_codedep_codecommune = b.id_codedep_codecommune
+WHERE c.population_totale > 10000
+GROUP BY c.population_totale , c.nom_commune 
+ORDER BY vente_pour_1000_habitants DESC 
+LIMIT 20;
